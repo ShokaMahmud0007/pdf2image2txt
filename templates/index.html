@@ -2,94 +2,55 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Multi OCR Tool</title>
+    <title>OCR Tool</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
-
 </head>
-<body class="bg-light">
-<div class="container mt-5">
-    <h2 class="text-center mb-4">OCR Tool: Images, JSON & Text from PDF/Image</h2>
-    <div class="card p-4 shadow-sm">
-        <form method="POST" enctype="multipart/form-data" onsubmit="startProgress()">
-            <div class="mb-3">
-                <label class="form-label">Choose Images or PDFs (Multiple allowed)</label>
-                <input type="file" class="form-control" name="images" id="images" multiple accept="image/*,application/pdf" required>
-            </div>
-            <div class="mb-3">
-                <label class="form-label">Select Output Options</label><br>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="extract_text" id="extract_text">
-                    <label class="form-check-label" for="extract_text">Extract Text</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="to_json" id="to_json">
-                    <label class="form-check-label" for="to_json">Save as JSON</label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="save_images" id="save_images">
-                    <label class="form-check-label" for="save_images">Convert PDF pages to Images</label>
-                </div>
-            </div>
-            <button type="submit" class="btn btn-primary">Start Processing</button>
-        </form>
+<body class="bg-light p-4">
+<div class="container">
+    <h1 class="mb-4">OCR Tool: Images, JSON & Text from PDF/Image</h1>
 
-        <div class="mt-4" id="progressContainer" style="display:none;">
-            <label>Progress:</label>
-            <div class="progress">
-                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%">0%</div>
-            </div>
-            <div id="progressText" class="mt-1">Processing...</div>
+    <form method="POST" enctype="multipart/form-data">
+        <div class="mb-3">
+            <label class="form-label">Choose Images or PDFs (Multiple allowed)</label>
+            <input class="form-control" type="file" name="image" multiple required>
         </div>
-    </div>
+
+        <div class="mb-3">
+            <label class="form-label">Select Output Options</label><br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="output_option" value="text" id="textOption">
+                <label class="form-check-label" for="textOption">Extract Text</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="output_option" value="json" id="jsonOption">
+                <label class="form-check-label" for="jsonOption">Save as JSON</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="output_option" value="images" id="imageOption">
+                <label class="form-check-label" for="imageOption">Convert PDF pages to Images</label>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" type="submit">Start Processing</button>
+    </form>
 
     {% if text %}
-    <div class="mt-4">
-        <h5>Extracted Text:</h5>
-        <pre class="bg-white p-3 border">{{ text }}</pre>
-    </div>
+        <h3 class="mt-4">Extracted Text:</h3>
+        <pre class="bg-white p-3 border rounded">{{ text }}</pre>
     {% endif %}
 
-    {% if show_json %}
-    <div class="mt-4">
-        <h5>Download JSON:</h5>
-        <a href="{{ url_for('download_json') }}" class="btn btn-success">Download JSON</a>
-        <pre class="bg-white p-3 border mt-2">{{ json_text }}</pre>
-    </div>
+    {% if json_text %}
+        <h3 class="mt-4">JSON Output:</h3>
+        <pre class="bg-white p-3 border rounded">{{ json_text }}</pre>
+    {% endif %}
+
+    {% if show_download %}
+        <a href="{{ url_for('download_json') }}" class="btn btn-success mt-3">Download JSON File</a>
     {% endif %}
 
     {% if show_images %}
-<div class="mt-4">
-    <h5>Converted Images:</h5>
-    <a href="{{ url_for('download_images_zip') }}" class="btn btn-primary mb-3">Download All Images (ZIP)</a>
-    <div class="row">
-        {% for img in images %}
-            <div class="col-md-3 mb-2">
-                <a href="{{ url_for('download_image', filename=img) }}" class="btn btn-outline-secondary w-100">{{ img }}</a>
-            </div>
-        {% endfor %}
-    </div>
+        <a href="{{ url_for('download_images') }}" class="btn btn-secondary mt-3">Download All Images (ZIP)</a>
+    {% endif %}
 </div>
-{% endif %}
-
-</div>
-
-<script>
-    function startProgress() {
-        document.getElementById('progressContainer').style.display = 'block';
-        let interval = setInterval(() => {
-            fetch('/progress')
-                .then(response => response.json())
-                .then(data => {
-                    const progress = data.progress;
-                    const current = data.current;
-                    const total = data.total;
-                    document.getElementById('progressBar').style.width = progress + "%";
-                    document.getElementById('progressBar').innerText = progress + "%";
-                    document.getElementById('progressText').innerText = `File ${current} of ${total}`;
-                    if (progress >= 100) clearInterval(interval);
-                });
-        }, 1000);
-    }
-</script>
 </body>
 </html>
