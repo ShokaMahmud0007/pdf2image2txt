@@ -1,145 +1,99 @@
-from flask import Flask, render_template, request, send_file, send_from_directory, jsonify
+from flask import Flask, render_template, request, send_file
 import pytesseract
-import zipfile
-import io
 from PIL import Image
 from pdf2image import convert_from_path
 import os
 import json
 import re
+import zipfile
 import uuid
-import shutil
 
 app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
 IMAGE_FOLDER = os.path.join(UPLOAD_FOLDER, "images")
-OUTPUT_FILE = os.path.join(UPLOAD_FOLDER, "output.json")
-PROGRESS_FILE = os.path.join(UPLOAD_FOLDER, "progress.json")
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(IMAGE_FOLDER, exist_ok=True)
-
-# Set tesseract and poppler path
-pytesseract.pytesseract.tesseract_cmd = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
-POPPLER_PATH = r"C:\poppler-24.08.0\Library\bin"
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     extracted_text = ""
     json_output = ""
-    show_json = False
+    show_download = False
     show_images = False
-    download_links = []
-
-    # Clean old files
-    for f in os.listdir(IMAGE_FOLDER):
-        os.remove(os.path.join(IMAGE_FOLDER, f))
-    with open(PROGRESS_FILE, 'w') as f:
-        json.dump({"progress": 0, "current": 0, "total": 0}, f)
+    image_files = []
+    download_json = False
+    download_zip = False
 
     if request.method == 'POST':
-        files = request.files.getlist('images')
-        extract_text = request.form.get('extract_text')
-        to_json = request.form.get('to_json')
-        save_images = request.form.get('save_images')
+        uploaded_files = request.files.getlist('files')
+        selected_options = request.form.getlist('options')
+        save_images = 'images' in selected_options
+        save_json = 'json' in selected_options
+        extract_text = 'text' in selected_options
 
-        all_lines = []
-        image_count = 0
-        total_files = len(files)
+        json_data = []
+        download_links = []
 
-        for idx, uploaded in enumerate(files):
-            ext = os.path.splitext(uploaded.filename)[1].lower()
-            filename = str(uuid.uuid4()) + ext
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
-            uploaded.save(file_path)
+        for file in uploaded_files:
+            ext = os.path.splitext(file.filename)[1].lower()
+            unique_id = uuid.uuid4().hex
+            temp_path = os.path.join(UPLOAD_FOLDER, f"{unique_id}_{file.filename}")
+            file.save(temp_path)
 
             if ext == '.pdf':
-                images = convert_from_path(file_path, poppler_path=POPPLER_PATH)
-                for i, img in enumerate(images):
-                    image_count += 1
-                    if save_images:
-                        img_name = f"page_{idx}_{i}.jpg"
-                        img_path = os.path.join(IMAGE_FOLDER, img_name)
-                        img.save(img_path)
-                        download_links.append(img_name)
-                    if extract_text or to_json:
-                        text = pytesseract.image_to_string(img, lang='eng+ben')
-                        all_lines.extend(text.strip().splitlines())
+                images = convert_from_path(temp_path)
             else:
-                img = Image.open(file_path)
-                image_count += 1
-                if save_images:
-                    img_name = f"image_{idx}.jpg"
-                    img_path = os.path.join(IMAGE_FOLDER, img_name)
-                    img.save(img_path)
-                    download_links.append(img_name)
-                if extract_text or to_json:
+                images = [Image.open(temp_path)]
+
+            for idx, img in enumerate(images):
+                if extract_text or save_json:
                     text = pytesseract.image_to_string(img, lang='eng+ben')
-                    all_lines.extend(text.strip().splitlines())
+                    if extract_text:
+                        extracted_text += f"\n{text.strip()}"
+                    if save_json:
+                        for line in text.strip().splitlines():
+                            line = re.sub(r'^[\d\s:.\-]*', '', line)
+                            if "-" in line:
+                                parts = line.split("-", 1)
+                                json_data.append({
+                                    "en": parts[0].strip(),
+                                    "bn": parts[1].strip()
+                                })
 
-            # Update progress
-            with open(PROGRESS_FILE, 'w') as f:
-                json.dump({
-                    "progress": int((idx + 1) / total_files * 100),
-                    "current": idx + 1,
-                    "total": total_files
-                }, f)
+                if save_images:
+                    img_filename = f"{unique_id}_{idx}.png"
+                    img_path = os.path.join(IMAGE_FOLDER, img_filename)
+                    img.save(img_path)
+                    download_links.append(img_filename)
 
-        if extract_text:
-            extracted_text = "\n".join(all_lines)
-
-        if to_json:
-            formatted = []
-            for line in all_lines:
-                line = re.sub(r'^[\d\s:.\-]*', '', line)
-                if "-" in line:
-                    parts = line.split("-", 1)
-                    formatted.append({
-                        "en": parts[0].strip(),
-                        "bn": parts[1].strip()
-                    })
-            json_output = json.dumps(formatted, ensure_ascii=False, indent=4)
-            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        if save_json and json_data:
+            with open(os.path.join(UPLOAD_FOLDER, "output.json"), "w", encoding="utf-8") as f:
+                json_output = json.dumps(json_data, ensure_ascii=False, indent=2)
                 f.write(json_output)
-            show_json = True
+            download_json = True
 
-        if save_images and download_links:
-            show_images = True
-            # Create ZIP of images if requested and images exist
         if save_images and download_links:
             zip_path = os.path.join(UPLOAD_FOLDER, "images.zip")
             with zipfile.ZipFile(zip_path, "w") as zipf:
                 for img_file in download_links:
-                    img_full_path = os.path.join(IMAGE_FOLDER, img_file)
-                    zipf.write(img_full_path, arcname=img_file)
+                    zipf.write(os.path.join(IMAGE_FOLDER, img_file), arcname=img_file)
             show_images = True
-
+            download_zip = True
+            image_files = download_links
 
     return render_template('index.html',
                            text=extracted_text,
                            json_text=json_output,
-                           show_json=show_json,
                            show_images=show_images,
-                           images=download_links)
+                           show_download_json=download_json,
+                           show_download_zip=download_zip)
 
 @app.route('/download/json')
 def download_json():
-    return send_file(OUTPUT_FILE, as_attachment=True)
+    return send_file(os.path.join(UPLOAD_FOLDER, "output.json"), as_attachment=True)
 
-@app.route('/download/image/<filename>')
-def download_image(filename):
-    return send_from_directory(IMAGE_FOLDER, filename, as_attachment=True)
-
-@app.route('/progress')
-def progress():
-    if os.path.exists(PROGRESS_FILE):
-        with open(PROGRESS_FILE, 'r') as f:
-            return jsonify(json.load(f))
-    return jsonify({"progress": 0, "current": 0, "total": 0})
-
-@app.route('/download/images_zip')
-def download_images_zip():
-    zip_path = os.path.join(UPLOAD_FOLDER, "images.zip")
-    return send_file(zip_path, as_attachment=True)
+@app.route('/download/zip')
+def download_zip():
+    return send_file(os.path.join(UPLOAD_FOLDER, "images.zip"), as_attachment=True)
 
 if __name__ == '__main__':
     app.run(debug=True)
