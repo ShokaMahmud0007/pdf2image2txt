@@ -1,0 +1,22 @@
+# Deployment Guide for Render
+
+## Step 1: Push to GitHub
+- Create a new GitHub repository.
+- Push this entire folder structure to GitHub.
+
+## Step 2: Create a Web Service on Render
+- Go to https://render.com
+- Click 'New' > 'Web Service'
+- Connect your GitHub and select this repository.
+
+## Step 3: Configure Settings on Render
+- **Build Command**: pip install -r requirements.txt
+- **Start Command**: gunicorn app:app
+- **Runtime**: Python 3 (default)
+- **Region**: Choose closest region
+
+## Step 4: System Packages (Optional)
+If you need poppler/tesseract, create a render.yaml (ask ChatGPT for help).
+
+## Step 5: Done!
+Your app will auto-deploy and be accessible via a public URL.
