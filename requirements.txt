@@ -4,5 +4,5 @@ Pillow==10.3.0
 pdf2image==1.17.0
 Werkzeug==2.3.7
 
-web: gunicorn app:app
+
 gunicorn==21.2.0
