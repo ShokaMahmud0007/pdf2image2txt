@@ -1,0 +1,13 @@
+sudo apt update
+sudo apt install tesseract-ocr poppler-utils
+
+
+
+**********************************
+Generate requirements.txt manually
+If you’re unsure which packages are used, run:
+
+bash
+Copy code
+pipreqs /path/to/your-app
+This auto-generates a requirements.txt from your imports.
